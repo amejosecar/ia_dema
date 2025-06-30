@@ -1,0 +1,287 @@
+# Tratamiento de los valores perdidos
+--------------------------------------------------------------------------------
+Cargamos los datos.
+
+En esta ocasión cargamos los datos desde la carpeta /content/sample_data/ de Colab. Es necesario ubicar ahí el archivo `Ejemplo_valores_perdidos.csv`
+--------------------------------------------------------------------------------
+import os
+import pandas as pd
+def cargar_datos():
+    data = pd.read_csv(r"C:\americo\ia_dema\z-ejercicios_kaggle\Vehicles_elect_2025\data_real\electric_vehicles_spec_2025.csv")
+    return data
+
+data = cargar_datos()
+--------------------------------------------------------------------------------
+Necesitaremos una versión de scikit-learn superior a la que viene instalada en colab (1.2.2 -> 1.5.0)
+--------------------------------------------------------------------------------
+## Visualización de los datos
+
+Lo primero que debemos hacer es visualizar los datos
+--------------------------------------------------------------------------------
+data
+--------------------------------------------------------------------------------
+Tambien podemos visualizar un numero determinado para mayor comodidad
+--------------------------------------------------------------------------------
+data.head(n=10)
+--------------------------------------------------------------------------------
+Tambien tenemos la opcion de realizar un "resumen estadistico" de cada una de las variables.
+--------------------------------------------------------------------------------
+data.describe()
+--------------------------------------------------------------------------------
+Todas las variables son de tipo numérico
+--------------------------------------------------------------------------------
+data.info()
+--------------------------------------------------------------------------------
+Una vez conocidos nuestros datos procedemos a analizar su completitud.<br>
+Tenemos que saber cuantos valores perdidos tenemos de cada variable antes de tomar una decision sobre como proceder.
+
+La función `isnull()` nos devuelve un Dataframe con las mismas filas y columnas que el original, pero en las celdas tenemos el 
+
+valor booleano que nos informa de si en esa posición hay almacenado o no un valor perdido.
+
+✅ .isnull() devuelve:
+
+- True → Significa que el valor es nulo o faltante. Es decir, no hay ningún dato en esa celda o variable.
+
+- False → Significa que el valor no es nulo, o sea, hay algo presente ahí (puede ser un número, texto, etc.).
+--------------------------------------------------------------------------------
+data.isnull()
+# data.notna()
+--------------------------------------------------------------------------------
+La función `sum()` nos hace una primera suma por columnas, de manera que sabemos cuántos valores perdidos hay en cada variable a estudiar.
+--------------------------------------------------------------------------------
+# 1. Calcula el conteo de nulos por columna
+null_counts = data.isnull().sum()
+
+# 2. Filtra solo > 0
+null_counts = null_counts[null_counts > 0]
+
+print("Columnas con valores nulos:")
+print(null_counts)
+
+# usamos lambda
+# print(data.isnull().sum()[lambda x: x>0])
+--------------------------------------------------------------------------------
+Otra opcion es calcular el porcentaje respecto al número de registros totales, que siempre es más representativo.
+--------------------------------------------------------------------------------
+data.shape
+--------------------------------------------------------------------------------
+print("Porcentajes de valores perdidos por cada variable:")
+Porcentajes_valores_perdidos_por_cada_variable = data.isnull().sum()/len(data.index)*100
+
+Porcentajes_valores_perdidos_por_cada_variable = Porcentajes_valores_perdidos_por_cada_variable[Porcentajes_valores_perdidos_por_cada_variable > 0]
+
+Porcentajes_valores_perdidos_por_cada_variable
+--------------------------------------------------------------------------------
+sum(data.isnull().sum())/(data.shape[0]*data.shape[1])*100
+--------------------------------------------------------------------------------
+# 4. Realizar diagramas de los valores perdidos que permitan ver su número y posición.
+--------------------------------------------------------------------------------
+# Crear un DataFrame booleano que indique la presencia de valores perdidos
+missing_data = data[data.columns[data.isnull().sum() > 0]]
+--------------------------------------------------------------------------------
+import matplotlib.pyplot as plt
+# Calcular la cantidad de valores perdidos por columna
+missing_values = missing_data.isnull().sum()
+
+# Visualizar el diagrama de barras de valores perdidos
+plt.figure(figsize=(10, 6))
+missing_values.plot(kind='bar', color='lightcoral')
+plt.title('Diagrama de Barras de Valores Perdidos', fontsize=16)
+plt.xlabel('Columnas', fontsize=12)
+plt.ylabel('Cantidad de Valores Perdidos', fontsize=12)
+plt.show()
+--------------------------------------------------------------------------------
+model                         0.209205
+number_of_cells              42.259414
+torque_nm                     1.464435
+fast_charging_power_kw_dc     0.209205
+fast_charge_port              0.209205
+towing_capacity_kg            5.439331
+cargo_volume_l                0.209205
+dtype: float64
+--------------------------------------------------------------------------------
+import missingno as msno
+msno.matrix(missing_data);
+--------------------------------------------------------------------------------
+import seaborn as sns
+sns.heatmap(missing_data.isnull(), cbar=False, cmap='viridis');
+--------------------------------------------------------------------------------
+# 5. Realizar un gráfico de correlación de los valores perdidos.
+--------------------------------------------------------------------------------
+# Crear un DataFrame booleano que indique la presencia de valores perdidos
+missing_data = data[data.columns[data.isnull().sum() > 0]].isnull()
+
+# Crear un mapa de calor de la correlación entre columnas con valores perdidos
+plt.figure(figsize=(10, 8))
+sns.heatmap(missing_data.corr(), annot=True, cmap='coolwarm', cbar=False)
+plt.title('Mapa de Correlación de Valores Perdidos')
+plt.show()
+--------------------------------------------------------------------------------
+#6. Eliminar aquellas variables que tengan más de un 30% de valores perdidos.
+
+model                         0.209205
+number_of_cells              42.259414
+torque_nm                     1.464435
+fast_charging_power_kw_dc     0.209205
+fast_charge_port              0.209205
+towing_capacity_kg            5.439331
+cargo_volume_l                0.209205
+dtype: float64
+--------------------------------------------------------------------------------
+data = cargar_datos()
+--------------------------------------------------------------------------------
+data2 = data.copy()
+
+for i in data2:
+    if data2[i].isnull().sum()/len(data2.index) > 0.1:
+        print("Elimino la columna", i)
+        data2 = data2.drop(columns=i)
+--------------------------------------------------------------------------------
+# Porcentaje de nulos por columna (en %)
+missing_pct = data.isnull().mean() * 100
+
+print("Porcentaje de valores faltantes por variable:")
+print(missing_pct.round(2))
+--------------------------------------------------------------------------------
+# Columnas a borrar >30% nulos
+to_drop = missing_pct[missing_pct > 30].index.tolist()
+print("Eliminando estas columnas (>30% nulos):", to_drop)
+
+--------------------------------------------------------------------------------
+
+# Crear copia sin esas columnas
+data2 = data.drop(columns=to_drop)
+
+--------------------------------------------------------------------------------
+
+# Verifica las nuevas dimensiones
+print("Dimensiones original:", data.shape)
+print("Dimensiones tras limpieza:", data2.shape)
+
+--------------------------------------------------------------------------------
+# Conserva sólo columnas con <=30% de nulos
+data2 = data.loc[:, data.isnull().mean() <= 0.30]
+data2.columns
+
+--------------------------------------------------------------------------------
+print("Quedan columnas:", data2.columns.tolist())
+print("Nueva forma:", data2.shape)
+
+--------------------------------------------------------------------------------
+data.loc[:, data.apply(lambda x: x.isnull().sum() < 0.3 * len(data.index))]
+--------------------------------------------------------------------------------
+# 7. Calcular el porcentaje de valores perdidos una vez eliminadas esas variables.
+--------------------------------------------------------------------------------
+## Porcentaje por variable
+--------------------------------------------------------------------------------
+data2.isnull().sum()/len(data2.index)
+--------------------------------------------------------------------------------
+## Porcentaje total
+--------------------------------------------------------------------------------
+sum(data2.isnull().sum())/(data2.shape[0]*data2.shape[1])*100
+--------------------------------------------------------------------------------
+#8. Eliminar de las tres primeras variables los NAs (sin incluir la Id).
+--------------------------------------------------------------------------------
+datoscomp = data2.iloc[:,1:4].dropna()
+--------------------------------------------------------------------------------
+data2.columns
+--------------------------------------------------------------------------------
+datoscomp.columns
+--------------------------------------------------------------------------------
+datoscomp_resto = data2.iloc[datoscomp.index, :]
+--------------------------------------------------------------------------------
+datoscomp_resto.columns
+--------------------------------------------------------------------------------
+datoscomp_resto.isnull().sum()
+--------------------------------------------------------------------------------
+#9. Eliminar de todas las variables los valores perdidos.
+--------------------------------------------------------------------------------
+datoscompletos = data2.dropna()
+--------------------------------------------------------------------------------
+datoscompletos.describe()
+--------------------------------------------------------------------------------
+#10. Comprobar que no existen valores perdidos.
+--------------------------------------------------------------------------------
+datoscompletos.isnull().sum().sum()
+--------------------------------------------------------------------------------
+Vemos la comparativa de las filas eliminadas en los dos pasos
+--------------------------------------------------------------------------------
+len(data2)
+--------------------------------------------------------------------------------
+len(datoscomp_resto)
+--------------------------------------------------------------------------------
+len(datoscompletos)
+--------------------------------------------------------------------------------
+# 11. Volver a cargar los datos
+--------------------------------------------------------------------------------
+data = cargar_datos()
+--------------------------------------------------------------------------------
+#12. Imputar la media para estimar los valores perdidos.
+--------------------------------------------------------------------------------
+data2.mean(numeric_only=True)
+--------------------------------------------------------------------------------
+data2 = data2.fillna(data2.mean(numeric_only = True))
+--------------------------------------------------------------------------------
+# 13. Comprobar que no existen valores perdidos.
+--------------------------------------------------------------------------------
+Todavía existen valores perdidos debidos a las columnas de texto.
+--------------------------------------------------------------------------------
+data2.isnull().any().any()
+--------------------------------------------------------------------------------
+perdidos_por_tipo = pd.DataFrame({"Perdidos" : data2.isnull().any(), "Tipos": data2.dtypes})
+perdidos_por_tipo
+--------------------------------------------------------------------------------
+from matplotlib import pyplot as plt
+import seaborn as sns
+import pandas as pd
+plt.subplots(figsize=(8, 8))
+df_2dhist = pd.DataFrame({
+    x_label: grp['Tipos'].value_counts()
+    for x_label, grp in perdidos_por_tipo.groupby('Perdidos')
+})
+sns.heatmap(df_2dhist, cmap='viridis')
+plt.xlabel('Perdidos')
+_ = plt.ylabel('Tipos')
+--------------------------------------------------------------------------------
+# 14. Volver a cargar los datos
+--------------------------------------------------------------------------------
+data = cargar_datos()
+--------------------------------------------------------------------------------
+# 15. Imputar los valores perdidos utilizando la imputación múltiple.
+--------------------------------------------------------------------------------
+data_num = data2[data2.describe().columns]
+--------------------------------------------------------------------------------
+data_num.columns
+--------------------------------------------------------------------------------
+data_no_num = data[data2.columns.difference(data_num.columns)]
+--------------------------------------------------------------------------------
+!pip install fancyimpute
+--------------------------------------------------------------------------------
+from fancyimpute import IterativeImputer
+my_imputer = IterativeImputer()
+
+datoNumcomp = my_imputer.fit_transform(data_num)
+print(type(datoNumcomp))
+
+datoNumcomp = pd.DataFrame(datoNumcomp)
+
+datoNumcomp.columns = data_num.columns
+
+datoNumcomp.index = data_num.index
+
+datos_completos= pd.concat([data_no_num, datoNumcomp], axis=1)
+
+
+datos_completos
+--------------------------------------------------------------------------------
+datoNumcomp.isnull().any().any()
+--------------------------------------------------------------------------------
+datos_completos.isnull().any().any()
+--------------------------------------------------------------------------------
+# 16. Guardar los datos.
+--------------------------------------------------------------------------------
+datos_completos.to_csv(r'C:\americo\ia_dema\10_Valores Perdidos\00_Teoría\ejercicios.csv')
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------

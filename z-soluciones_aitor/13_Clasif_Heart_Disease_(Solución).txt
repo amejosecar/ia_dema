@@ -1,0 +1,346 @@
+import numpy as np
+import pandas as pd
+import os
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix
+
+from sklearn import preprocessing
+
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+from sklearn import metrics
+
+from sklearn.naive_bayes import GaussianNB
+from sklearn.model_selection import cross_val_score
+
+from sklearn import tree
+from sklearn.tree import export_graphviz
+from six import StringIO
+import pydotplus
+import graphviz
+
+from sklearn.ensemble import RandomForestClassifier
+
+import xgboost as xgb
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def cuadro_matriz_confusion(confusion):
+    fig, ax = plt.subplots()
+
+    labels = ['Verdadero Neg', 'Falso Pos', 'Falso Neg', 'Verdadero Pos']
+    categories = ['0', '1']
+    counts = ['{0:,}'.format(value) for value in confusion.flatten()]
+    percentages = ['{0:.2%}'.format(value) for value in confusion.flatten() / np.sum(confusion)]
+    labels = [f'{label}\n{count}\n{percentage}' for label, count, percentage in zip(labels, counts, percentages)]
+    labels = np.asarray(labels).reshape(2, 2)
+
+    sns.heatmap(confusion, annot=labels, fmt='', cmap='Blues', xticklabels=categories, yticklabels=categories, ax=ax)
+    plt.xlabel('Valores predichos')
+    plt.ylabel('Valores reales')
+    plt.title('Matriz de confusión')
+    plt.show()
+
+def resumen_metricas(confusion, y_test):
+    # Calcular las tasas de precisión, sensibilidad, especificidad y valor predictivo positivo
+    accuracy = (confusion[0, 0] + confusion[1, 1]) / len(y_test)
+    recall = confusion[1, 1] / (confusion[1, 1] + confusion[1, 0])
+    specificity = confusion[0, 0] / (confusion[0, 0] + confusion[0, 1])
+    ppv = confusion[1, 1] / (confusion[1, 1] + confusion[0, 1])
+
+    # Mostrar las tasas de precisión, sensibilidad, especificidad y valor predictivo positivo
+    print("Precisión (Accuracy):", accuracy)
+    print("Sensibilidad (Recall):", recall)
+    print("Especificidad:", specificity)
+    print("Valor Predictivo Positivo (PPV):", ppv)
+
+data = pd.read_csv("/content/sample_data/heart_data.csv")
+
+data.head(n=10)
+
+# Realizamos un resumen estadistico de las variables.
+descripcion_data = data.describe(include="all").T
+descripcion_data
+
+# Comprobamos que no hay valores perdidos.
+data.isnull().sum()
+
+# Con esta funcion vemos si existen (TRUE) o no (FALSE) datos perdidos
+data.isnull().any().any()
+
+data["cardio"].value_counts().plot(kind = "bar");
+
+# Tras comprobar que no existen valores perdidos analizamos las variables.
+# El objetivo es determinar si todas las variables son utiles para la modelizacion.
+# Hay una serie de variables que no nos proporcionan informacion.
+# Eliminamos esas variables
+del data['index']
+del data['id']
+
+# La variable "gender" toma valores 1 y 2. La reducimos en una unidad para que tome 0 y 1
+data["gender"] = data["gender"] - 1
+
+# Volvemos a visualizar los datos.
+data.head(n=10)
+
+for columna in data.columns:
+    if len(data[columna].unique()) < 15:
+        print(f"Columna {columna} -> Valores únicos {data[columna].unique()}")
+
+data['cholesterol'].value_counts().plot(kind = "bar");
+# Cambio posible
+# data['cholesterol'] = data['cholesterol'] != 1
+
+data['gluc'].value_counts().plot(kind = "bar");
+# Cambio posible
+# data['gluc'] = data['gluc'] != 1
+
+datos_final = data
+
+data = data[(data["ap_hi"]<300) & (data["ap_hi"]>50)]
+data.boxplot(column="ap_hi", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+
+data = data[(data["ap_lo"]<250) & (data["ap_lo"]>25)]
+data.boxplot(column="ap_lo", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+data['ap_lo'].value_counts().head(20)
+
+data['ap_lo'].value_counts().sort_index().plot(x='Presión arterial baja',y='frecuencia',
+                                           kind='kde', legend=True,title='Distribucion de la Tensión arterial')
+data['ap_hi'].value_counts().sort_index().plot(x='Presión arterial alta',y='frecuencia',
+                                           kind='kde')
+
+data.loc[data["height"]<125, ["height", "weight"]]
+
+data = data[(data["height"]<220) & (data["height"]>125)]
+data.boxplot(column="height", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+data["BMI"] = (10000 * data["weight"]) / (data["height"] **2)
+
+#data = data[data["BMI"]<90]
+data = data[data["BMI"]>14]
+data.boxplot(column="BMI", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+max(data['BMI'])
+
+data['BMI'].plot(kind='hist', legend=True, title='Índice de Masa Corporal')
+
+# Ajusta los límites del eje X
+plt.xlim(10, 86)
+
+# Configura etiquetas y muestra el gráfico
+plt.xlabel('Índice de Masa Corporal')
+plt.ylabel('Frecuencia')
+
+data.loc[data["weight"]<40, ["height", "weight", "age", "BMI"]]
+
+data.boxplot(column="weight", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+
+data2 = data
+data2["age"] = data2["age"]/365
+data2.boxplot(column="age", by="cardio", ax=None, fontsize=None, rot=90, grid=True);
+
+datos_final = data
+
+datos_final = datos_final.reset_index()
+datos_final.index
+
+datos_final.columns
+
+datos_final = datos_final.drop(columns='index')
+datos_final = datos_final.drop(columns='weight')
+datos_final = datos_final.drop(columns='height')
+datos_final = datos_final.drop(columns='ap_lo')
+
+f, ax = plt.subplots(figsize=(10, 8))
+corr = datos_final.corr()
+sns.heatmap(corr, annot=True, mask=np.zeros_like(corr, dtype=bool), cmap=sns.diverging_palette(220, 10, as_cmap=True),square=True, ax=ax)
+
+from sklearn.model_selection import train_test_split
+y = datos_final['cardio']
+X = datos_final.drop('cardio', axis = 1)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+RegLog = LogisticRegression(C=1.0,
+                            class_weight = None,
+                            dual=False,
+                            fit_intercept=True,
+                            intercept_scaling=1,
+                            max_iter=100,
+                            multi_class='ovr',
+                            n_jobs=1,
+                            penalty='l2',
+                            random_state=None,
+                            solver='liblinear',
+                            tol=0.0001,
+                            verbose=0,
+                            warm_start=False)
+
+# Aplicamos el modelo a los datos de train
+RegLog.fit(X_train, y_train)
+print(RegLog.feature_names_in_)
+RegLog.coef_
+
+# Realizamos la prediccion sobre los datos de test
+prediccion = RegLog.predict(X_test)
+
+# Comprobamos la precision del modelo con respecto a los datos de testeo.
+precision = RegLog.score(X_test, y_test)
+
+precision
+
+cuadro_matriz_confusion(confusion_matrix(y_test, prediccion))
+
+resumen_metricas(confusion_matrix(y_test, prediccion), y_test)
+
+from sklearn.metrics import roc_curve, roc_auc_score
+import matplotlib.pyplot as plt
+
+# Obtener las probabilidades predichas (no las clases)
+y_scores = RegLog.predict_proba(X_test)[:, 1]  # Probabilidades de la clase positiva
+
+# Ahora calcula la curva ROC con las probabilidades
+fpr, tpr, thresholds = roc_curve(y_test, y_scores)
+auc_score = roc_auc_score(y_test, y_scores)
+
+# Gráfico
+plt.plot(fpr, tpr, label=f'AUC = {auc_score:.2f}')
+plt.plot([0, 1], [0, 1], 'k--')
+plt.xlabel('Tasa de Falsos Positivos')
+plt.ylabel('Tasa de Verdaderos Positivos')
+plt.title('Curva ROC (con probabilidades)')
+plt.legend()
+plt.show()
+
+from sklearn.preprocessing import StandardScaler
+
+ss = StandardScaler()
+datosfinal_sin_columnas = ss.fit_transform(datos_final)
+datos_normalizados = pd.DataFrame(datosfinal_sin_columnas, columns = datos_final.columns)
+datos_normalizados.head(20)
+
+datos_normalizados.isnull().sum()
+
+datos_normalizados.columns
+
+datos_normalizados = datos_normalizados.reset_index()
+datos_final = datos_final.reset_index()
+datos_normalizados["gender"] = datos_final["gender"]
+datos_normalizados["alco"] = datos_final["alco"]
+datos_normalizados["active"] = datos_final["active"]
+datos_normalizados["cardio"] = datos_final["cardio"]
+
+datos_normalizados.isnull().sum()
+
+knn = KNeighborsClassifier(algorithm='auto',
+                           leaf_size=30,
+                           metric='minkowski',
+                           metric_params=None,
+                           n_jobs=1,
+                           n_neighbors=5,
+                           p=2,
+                           weights='uniform')
+
+from sklearn.model_selection import train_test_split
+y = datos_normalizados['cardio']
+X = datos_normalizados.drop('cardio', axis = 1)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+
+# Entrenamiento
+knn.fit(X_train, y_train)
+
+# Realizamos la prediccion sobre los datos de test
+prediccion = knn.predict(X_test)
+
+# Calculamos el nivel de acierto entre lo predicho y el test
+cuadro_matriz_confusion(confusion_matrix(y_test, prediccion))
+
+resumen_metricas(confusion_matrix(y_test, prediccion), y_test)
+
+gnb = GaussianNB()
+
+Bayes = gnb.fit(X_train, y_train)
+
+prediccion = gnb.predict(X_test)
+
+accuracy_score(y_test, prediccion)
+
+# Calculamos el nivel de acierto entre lo predicho y el test
+cuadro_matriz_confusion(confusion_matrix(y_test, prediccion))
+
+resumen_metricas(confusion_matrix(y_test, prediccion), y_test)
+
+modelo = tree.DecisionTreeClassifier(class_weight=None,
+                                     criterion='gini',
+                                     max_depth=3,
+                                     max_features=None,
+                                     max_leaf_nodes=None,
+                                     min_impurity_decrease=0.0,
+                                     min_samples_leaf=1,
+                                     min_samples_split=2,
+                                     min_weight_fraction_leaf=0.0,
+                                     random_state=None,
+                                     splitter='best')
+
+arbol = modelo.fit(X_train, y_train)
+
+prediccion = arbol.predict(X_test)
+
+# Calculamos el nivel de acierto entre lo predicho y el test
+cuadro_matriz_confusion(confusion_matrix(y_test, prediccion))
+
+resumen_metricas(confusion_matrix(y_test, prediccion), y_test)
+
+importanciasarbol = pd.DataFrame(arbol.feature_importances_)
+importanciasarbol.index = (X.columns)
+print(importanciasarbol)
+
+plt.figure(figsize=(24,16))
+
+tree.plot_tree(arbol.fit(X_train, y_train), feature_names=X.columns,
+               class_names=['0', '1'], filled=False);
+
+import xgboost as xgb
+# conda install -c anaconda py-xgboost
+
+modelo = xgb.XGBClassifier(base_score=0.5,
+                           colsample_bylevel=1,
+                           colsample_bytree=1,
+                           gamma=0,
+                           learning_rate=0.001,
+                           max_delta_step=0,
+                           max_depth=5,
+                           min_child_weight=1,
+                           missing=1,
+                           n_estimators=1500,
+                           objective='binary:logistic',
+                           reg_alpha=0,
+                           reg_lambda=1,
+                           scale_pos_weight=1,
+                           seed=0,
+                           verbosity=0,
+                           subsample=1)
+
+XGBoost = modelo.fit(X_train, y_train)
+prediccion = XGBoost.predict(X_test)
+print(f"Precisión de train {accuracy_score(y_train, XGBoost.predict(X_train))}")
+print(f"Precisión de test {accuracy_score(y_test, prediccion)}")
+
+confusion = confusion_matrix(y_test, prediccion)
+
+cuadro_matriz_confusion(confusion)
+
+resumen_metricas(confusion, y_test)
+
+#cross_val_score(XGBoost, X, y, cv=10)
+cross_val_score(XGBoost, X, y, cv=10, scoring='precision')
+#cross_val_score(XGBoost, X, y, cv=10, scoring='recall')
+
+importanciasxgb = pd.DataFrame(XGBoost.feature_importances_)
+importanciasxgb.index = (X.columns)
+importanciasxgb
